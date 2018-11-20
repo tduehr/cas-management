@@ -5,5 +5,8 @@ dependencies {
     
     implementation libraries.casServer.ldap 
     implementation libraries.pac4j
+    api libraries.nimbus;
+    api libraries.casclient
+    api libraries.cassecurityfilter
 
 }

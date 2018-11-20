@@ -2,6 +2,9 @@ description "Apereo CAS Management Webapp Config"
 
 dependencies {
     api libraries.pac4j
+    api libraries.nimbus;
+    api libraries.casclient
+    api libraries.cassecurityfilter
     implementation libraries.thymeleaf
     implementation libraries.casServer.authentication
     implementation libraries.casServer.oidc 

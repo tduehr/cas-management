@@ -2,6 +2,9 @@ description "Apereo CAS Management Config Audit"
 
 dependencies {
     implementation libraries.pac4j
+    api libraries.nimbus;
+    api libraries.casclient
+    api libraries.cassecurityfilter
     implementation libraries.casServer.audit
 
     implementation project(":core:cas-mgmt-core-audit")

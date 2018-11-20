@@ -1,8 +1,11 @@
+import java.util.concurrent.ConcurrentHashMap
+
 description = "Apereo CAS Management Application $version"
 
 defaultTasks "clean", "build"
 
 ext {
+    srcTagMap = new ConcurrentHashMap<File, Set<String>>()
     publishSnapshots = Boolean.getBoolean("publishSnapshots")
     publishReleases = Boolean.getBoolean("publishReleases")
     sonatypeUsername = System.getProperty("sonatypeUsername")
@@ -12,6 +15,8 @@ ext {
     skipErrorProneCompiler = System.getProperty("skipErrorProneCompiler")
     forceBom = Boolean.getBoolean("forceBom")
     enableRemoteDebugging = Boolean.getBoolean("enableRemoteDebugging")
+    remoteDebuggingSuspend = Boolean.getBoolean("remoteDebuggingSuspend") ? "y" : "n"
+
     continuousIntegrationBuild = Boolean.getBoolean("CI") || Boolean.getBoolean("TRAVIS") || Boolean.getBoolean("CONTINUOUS_INTEGRATION")
 
     publishingRelease = publishReleases && rootProject.sonatypeUsername != null && rootProject.sonatypePassword != null
@@ -28,6 +33,7 @@ ext {
 def isArtifactSigningRequired = {
     return (publishReleases && sonatypeUsername != null && sonatypePassword != null)
 }
+
 apply from: rootProject.file("gradle/overrides.gradle")
 apply from: rootProject.file("gradle/dependencies.gradle")
 apply plugin: "com.github.ben-manes.versions"
@@ -51,7 +57,8 @@ buildscript {
     }
 
     dependencies {
-        classpath "com.gradle:build-scan-plugin:1.16"
+        classpath "com.gradle:build-scan-plugin:2.0.2"
+        classpath "gradle.plugin.com.ewerk.gradle.plugins:jaxb2-plugin:1.0.9"
         classpath "org.springframework.boot:spring-boot-gradle-plugin:$springBootVersion"
         classpath "com.netflix.nebula:gradle-lint-plugin:$gradleLintVersion"
         classpath "io.franzbecker:gradle-lombok:$gradleLombokVersion"
@@ -105,8 +112,8 @@ allprojects {
     apply plugin: "maven"
     apply plugin: "signing"
     apply plugin: "jacoco"
-    apply plugin: "groovy"
-
+    apply plugin: "java"
+    
     project.ext["forceBootifulArtifact"] = null
 
     if (!rootProject.publishSnapshots && !Boolean.getBoolean("skipGradleLint")) {
@@ -155,10 +162,10 @@ allprojects {
     javadoc {
         options.addBooleanOption('html5', true)
         failOnError = Boolean.getBoolean("ignoreJavadocFailures")
+        excludes = ['**/generated/**']
     }
     
 }
-
 
 subprojects {
     task dependencyCheckAnalyze(type: org.owasp.dependencycheck.gradle.tasks.Analyze)
@@ -189,7 +196,7 @@ subprojects {
     apply from: rootProject.file("gradle/tests.gradle")
 
     ext.libraries = rootProject.ext.libraries
-    
+
     repositories {
         mavenLocal()
         mavenCentral()
@@ -197,16 +204,22 @@ subprojects {
         maven { url "https://oss.sonatype.org/content/repositories/snapshots" }
         maven { url "https://repo.spring.io/plugins-release/" }
         maven { url "https://repo.spring.io/milestone/" }
+        maven { url "https://repo.spring.io/snapshot/" }
         maven { url "https://repo.spring.io/libs-milestone" }
         maven { url "https://dl.bintray.com/uniconiam/maven" }
         maven { url "https://oss.jfrog.org/artifactory/oss-snapshot-local" }
         maven { url "https://jitpack.io" }
         jcenter()
     }
-    
+
 
     configurations {
         tests
+        developmentOnly
+        
+        runtimeClasspath {
+            extendsFrom developmentOnly
+        }
     }
 
     configurations.all {
@@ -218,6 +231,14 @@ subprojects {
             cacheDynamicVersionsFor 1, "days"
             cacheChangingModulesFor 5, "days"
 
+            /**
+             * Required for all JRadius modules
+             */
+            eachDependency { DependencyResolveDetails details ->
+                if (details.requested.group == "gnu-getopt") {
+                    details.useTarget group: "gnu.getopt", name: "java-getopt", version: details.requested.version
+                }
+            }
         }
         exclude(group: "ch.qos.logback", module: "logback-core")
         exclude(group: "ch.qos.logback", module: "logback-classic")
@@ -337,10 +358,8 @@ subprojects {
             it.finalizedBy outputSpotbugsReports
         }
     }
-    
 
     dependencies {
-        
         optional libraries.springcomponentindexer
 
         implementation libraries.aspectj
@@ -351,7 +370,7 @@ subprojects {
         api libraries.commons
         api libraries.springboot
 
-        provided libraries.javax
+        api libraries.javax
 
         if (!Boolean.getBoolean("skipFindbugs")) {
             spotbugs libraries.findbugs
